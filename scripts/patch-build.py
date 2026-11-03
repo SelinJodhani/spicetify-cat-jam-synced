@@ -4,7 +4,7 @@ Usage: python3 scripts/patch-build.py <upstream cat-jam.js> <output cat-jam.js>
 
 - Find the player bar / library container without Spotify's old mapped class names.
 - Fall back to Deezer BPM (via ISRC) when Spotify's audio analysis is unavailable.
-- Halve double-time tempos for quiet songs ("Half-time for slow songs" setting).
+- Halve double-time tempos for slow songs ("Half-time for slow songs" setting).
 - Stop the dead audio-features endpoint from turning the BPM into NaN.
 """
 import sys
@@ -49,12 +49,15 @@ sub('a?(i=await g(),', 'a?(i=l=await g(),')
 helpers = r'''
 const catjamTimeout=(p,ms=4e3)=>{let t;return Promise.race([p,new Promise((_,r)=>{t=setTimeout(()=>r(new Error("timeout")),ms)})]).finally(()=>clearTimeout(t))};
 const catjamCacheKey="catjam-bpm-cache",catjamMisses=new Set;let catjamNoFeatures=!1;
-// Beat trackers report quiet, sparse songs (piano, lo-fi) at double their felt tempo.
+// Beat trackers often report slow songs at double their felt tempo. Halving stays on the beat
+// (the cat bops every other beat), so Auto leans towards halving: very fast tempos, and fast
+// tempos the analysis is unsure of or that come from quiet, sparse songs (piano, lo-fi).
 function catjamFold(a){
   const t=a?.track;if(!t?.tempo)return a;
   let mode;try{mode=JSON.parse(localStorage.getItem("catjam-settings.catjam-halftime")||"{}").value}catch(e){}
   mode=mode||"Auto (quiet songs)";
-  const half=mode==="Always"||mode!=="Off"&&t.tempo>=110&&t.loudness<-12;
+  const auto=t.tempo>150||t.tempo>=110&&(t.loudness<-12||t.tempo_confidence<.3);
+  const half=mode==="Always"||mode!=="Off"&&auto;
   if(!half)return a;
   console.log("[CAT-JAM] Half-time:",t.tempo,"->",t.tempo/2);
   return{...a,track:{...t,tempo:t.tempo/2}};
