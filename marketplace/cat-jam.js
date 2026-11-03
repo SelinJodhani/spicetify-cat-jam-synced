@@ -1,14 +1,14 @@
 !async function(){for(;!Spicetify.React||!Spicetify.ReactDOM;)await new Promise(e=>setTimeout(e,10));
 const catjamTimeout=(p,ms=4e3)=>{let t;return Promise.race([p,new Promise((_,r)=>{t=setTimeout(()=>r(new Error("timeout")),ms)})]).finally(()=>clearTimeout(t))};
 const catjamCacheKey="catjam-bpm-cache",catjamMisses=new Set;let catjamNoFeatures=!1;
-// Beat trackers often report slow songs at double their felt tempo. Halving stays on the beat
-// (the cat bops every other beat), so Auto leans towards halving: very fast tempos, and fast
-// tempos the analysis is unsure of or that come from quiet, sparse songs (piano, lo-fi).
+// Beat trackers often report slow songs at double their felt tempo. Auto halves fast tempos
+// the analysis is unsure of, or that come from quiet, sparse songs (piano, lo-fi); confident
+// fast tempos (e.g. Blinding Lights, 171 BPM) are left alone.
 function catjamFold(a){
   const t=a?.track;if(!t?.tempo)return a;
   let mode;try{mode=JSON.parse(localStorage.getItem("catjam-settings.catjam-halftime")||"{}").value}catch(e){}
   mode=mode||"Auto (quiet songs)";
-  const auto=t.tempo>150||t.tempo>=110&&(t.loudness<-12||t.tempo_confidence<.3);
+  const auto=t.tempo>=110&&(t.loudness<-12||t.tempo_confidence<.3);
   const half=mode==="Always"||mode!=="Off"&&auto;
   if(!half)return a;
   console.log("[CAT-JAM] Half-time:",t.tempo,"->",t.tempo/2);
