@@ -6,6 +6,7 @@ Usage: python3 scripts/patch-build.py <upstream cat-jam.js> <output cat-jam.js>
 - Fall back to Deezer BPM (via ISRC) when Spotify's audio analysis is unavailable.
 - Halve double-time tempos for slow songs ("Half-time for slow songs" setting).
 - Stop the dead audio-features endpoint from turning the BPM into NaN.
+- Recreate the cat if a Spotify re-render removes it or the video fails to load.
 """
 import sys
 
@@ -39,6 +40,11 @@ sub('e=await b(a),', 'e=await b(a),Number.isFinite(e)&&e>0||(e=a),')
 # Fold double-time tempos before computing the playback rate.
 sub('async function y(a){let i=', 'async function y(a){a=catjamFold(a);let i=')
 
+# Spotify re-renders can drop the injected video, and a failed load leaves it blank:
+# periodically recreate it in either case.
+sub('f.pushSettings(),h(),',
+    'f.pushSettings(),h(),setInterval(()=>{const v=document.getElementById("catjam-webm");(!v||v.error)&&!catjamRestoring&&(catjamRestoring=!0,h().finally(()=>{catjamRestoring=!1}))},3e3),')
+
 # Setting to control the half-time fold.
 sub('f.addInput("catjam-webm-position-left-size"',
     'f.addDropDown("catjam-halftime","Half-time for slow songs (analysis often reports slow songs at double tempo)",["Auto (quiet songs)","Off","Always"],0),f.addInput("catjam-webm-position-left-size"')
@@ -48,7 +54,7 @@ sub('a?(i=await g(),', 'a?(i=l=await g(),')
 
 helpers = r'''
 const catjamTimeout=(p,ms=4e3)=>{let t;return Promise.race([p,new Promise((_,r)=>{t=setTimeout(()=>r(new Error("timeout")),ms)})]).finally(()=>clearTimeout(t))};
-const catjamCacheKey="catjam-bpm-cache",catjamMisses=new Set;let catjamNoFeatures=!1;
+const catjamCacheKey="catjam-bpm-cache",catjamMisses=new Set;let catjamNoFeatures=!1,catjamRestoring=!1;
 // Beat trackers often report slow songs at double their felt tempo. Auto halves fast tempos
 // the analysis is unsure of, or that come from quiet, sparse songs (piano, lo-fi); confident
 // fast tempos (e.g. Blinding Lights, 171 BPM) are left alone.
